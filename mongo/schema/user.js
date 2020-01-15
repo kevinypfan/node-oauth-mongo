@@ -1,4 +1,4 @@
 module.exports = {
-	username: String,
-	password: String
+  username: { type: String, unique: true },
+  password: String
 };

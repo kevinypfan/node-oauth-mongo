@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -14,5 +11,16 @@
     "express": "^4.17.1",
     "mongoose": "^5.8.7",
     "oauth2-server": "^3.0.1"
+  },
+  "devDependencies": {
+    "jshint": "^2.11.0",
+    "mocha": "^7.0.0",
+    "should": "11.2.1",
+    "sinon": "2.3.2"
+  },
+  "scripts": {
+    "pretest": "./node_modules/.bin/jshint --config ./.jshintrc lib test",
+    "test": "NODE_ENV=test ./node_modules/.bin/mocha 'test/**/*_test.js'",
+    "test-debug": "NODE_ENV=test ./node_modules/.bin/mocha  --inspect --debug-brk 'test/**/*_test.js'"
   }
 }

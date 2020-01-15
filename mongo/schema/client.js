@@ -1,7 +1,7 @@
 module.exports = {
-	id: String,
-	clientId: String,
-	clientSecret: String,
-	grants: [String],
-	redirectUris: [String]
+  id: String,
+  clientId: { type: String, unique: true },
+  clientSecret: String,
+  grants: [String],
+  redirectUris: [String]
 };
