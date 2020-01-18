@@ -3,6 +3,8 @@ var clientModel = require("./mongo/model/client"),
   refreshTokenModel = require("./mongo/model/refreshToken"),
   authorizationCodeModel = require("./mongo/model/authorizationCode"),
   userModel = require("./mongo/model/user");
+const OAuthError = require("oauth2-server/lib/errors/oauth-error");
+const bcrypt = require("bcryptjs");
 
 const saveToken = function(token, client, user) {
   console.log(user);
@@ -69,22 +71,27 @@ var getClient = function(clientId, clientSecret) {
     }));
 };
 
-var getUser = function(username, password, callback) {
-  userModel
+var getUser = function(username, password) {
+  return userModel
     .findOne({
-      username: username,
-      password: password
+      username: username
     })
     .lean()
-    .exec(
-      function(callback, err, user) {
-        if (!user) {
-          console.error("User not found");
-        }
-
-        callback(err, user);
-      }.bind(null, callback)
-    );
+    .then(user => {
+      const err = new OAuthError("username or password incorrect", {
+        code: 401
+      });
+      if (!user) return err;
+      return new Promise((resolve, reject) => {
+        bcrypt.compare(password, user.password).then(res => {
+          if (res) {
+            resolve(user);
+          } else {
+            reject(err);
+          }
+        });
+      });
+    });
 };
 
 // var getUserFromClient = function(client) {
@@ -142,9 +149,9 @@ function getAuthorizationCode(authorizationCode) {
     })
     .then(([code, client, user]) => {
       return {
-        code: code.authorization_code,
-        expiresAt: code.expires_at,
-        redirectUri: code.redirect_uri,
+        code: code.authorizationCode,
+        expiresAt: code.expiresAt,
+        redirectUri: code.redirectUri,
         scope: code.scope,
         client: client, // with 'id' property
         user: user
