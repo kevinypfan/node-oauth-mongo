@@ -7,11 +7,13 @@ var express = require("express"),
   Request = OAuth2Server.Request,
   Response = OAuth2Server.Response;
 
+const { URLSearchParams } = require("url");
 var session = require("express-session");
 const MongoStore = require("connect-mongo")(session);
 
 var app = express();
 
+app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
@@ -52,50 +54,51 @@ app.oauth = new OAuth2Server({
 });
 
 app.get("/oauth/authorize/consent", (req, res, next) => {
-  res.sendFile(path.resolve(__dirname, "./views/consent.html"));
+  res.render("consent", { query: req._parsedUrl.search });
 });
 
-app.post(
-  "/oauth/authorize/consent",
-  (req, res, next) => {
-    // request.query.allowed = "false" will denied.
-    res.send(req.body);
-  },
-  authorizeHandler({
-    authenticateHandler: {
-      handle: function(request, response) {
-        return request.session.user;
-      }
-    }
-  })
-);
+app.post("/oauth/authorize/consent", (req, res, next) => {
+  // request.query.allowed = "false" will denied.
+  const copyQuery = { ...req.query };
+  delete copyQuery.returnUri;
+  const params = new URLSearchParams();
+  for (let el in copyQuery) {
+    params.append(el, copyQuery[el]);
+  }
+  if (req.body.allow) {
+    req.session.consent = true;
+    params.append("allowed", "true");
+  } else {
+    params.append("allowed", "false");
+  }
+  res.redirect(req.query.returnUri + "?" + params.toString());
+});
 
 app.get(
   "/oauth/authorize",
   function(req, res, next) {
     if (!req.session.user) {
       return res.redirect(
-        "/login?redirect=" +
-          req.path +
-          "&client_id=" +
-          req.query.client_id +
-          "&redirect_uri=" +
-          req.query.redirect_uri +
-          "&state=" +
-          req.query.state
+        "/login?returnUri=" + req.path + "&" + req._parsedUrl.query
       );
     }
     //TODO:  SHOW THEM  "do you authorise xyz app to access your content?" page
+    console.log("req.query.allowed", req.query.allowed === "false");
+    if (req.query.allowed === "false") {
+      return res.redirect(
+        req.query.redirect_uri +
+          "?" +
+          "error=access_denied&error_description=The+resource+owner+denied+the+request.&state=" +
+          req.query.state
+      );
+    }
+
     if (!req.session.consent) {
       return res.redirect(
-        "/oauth/authorize/consent?redirect=" +
+        "/oauth/authorize/consent?returnUri=" +
           req.path +
-          "&client_id=" +
-          req.query.client_id +
-          "&redirect_uri=" +
-          req.query.redirect_uri +
-          "&state=" +
-          req.query.state
+          "&" +
+          req._parsedUrl.query
       );
     }
     next();
@@ -107,7 +110,15 @@ app.get(
       }
     }
   }),
-  (req, res) => {}
+  (req, res) => {
+    // TODO: if denied error=access_denied&error_description=The+resource+owner+denied+the+request.&state=0987poi
+    console.log(res.locals.oauth.code);
+    const params = new URLSearchParams();
+    params.append("code", res.locals.oauth.code.authorizationCode);
+    params.append("state", req.query.state);
+
+    res.redirect(req.query.redirect_uri + "?" + params.toString());
+  }
 );
 
 app.all("/oauth/token", obtainToken);

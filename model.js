@@ -58,6 +58,7 @@ var getAccessToken = function(token, callback) {
 };
 
 var getClient = function(clientId, clientSecret) {
+  console.log("getClient");
   console.log("clientId = ", clientId);
   return clientModel
     .findOne({
@@ -141,6 +142,13 @@ function getAuthorizationCode(authorizationCode) {
   return authorizationCodeModel
     .findOne({ authorizationCode: authorizationCode, revoked: false })
     .then(function(code) {
+      if (!code) {
+        const err = new OAuthError("Unauthorized", {
+          code: 401,
+          name: "invalid_code"
+        });
+        throw err;
+      }
       return Promise.all([
         code,
         clientModel({ clientId: code.clientId }),
@@ -184,9 +192,11 @@ function saveAuthorizationCode(code, client, user) {
 }
 
 function revokeAuthorizationCode(code) {
+  console.log("revokeAuthorizationCode");
+  console.log("code = ", code);
   return authorizationCodeModel.updateOne(
     {
-      authorizationCode: code.authorizationCode
+      authorizationCode: code.code
     },
     { $set: { revoked: true } }
   );
