@@ -4,10 +4,11 @@ var clientModel = require("./mongo/model/client"),
   authorizationCodeModel = require("./mongo/model/authorizationCode"),
   userModel = require("./mongo/model/user");
 const OAuthError = require("oauth2-server/lib/errors/oauth-error");
+const InvalidRequestError = require("oauth2-server/lib/errors/invalid-request-error");
+
 const bcrypt = require("bcryptjs");
 
 const saveToken = function(token, client, user) {
-  console.log(user);
   let fns = [
     new accessTokenModel({
       accessToken: token.accessToken,
@@ -25,8 +26,6 @@ const saveToken = function(token, client, user) {
     }).save()
   ];
   return Promise.all(fns).then(([accessToken, refreshToken]) => {
-    // console.log(accessToken);
-    // console.log(refreshToken);
     return {
       accessToken: accessToken.accessToken,
       accessTokenExpiresAt: accessToken.expiresAt,
@@ -39,27 +38,36 @@ const saveToken = function(token, client, user) {
   });
 };
 
-var getAccessToken = function(token, callback) {
-  accessTokenModel
+var getAccessToken = function(accessToken) {
+  return accessTokenModel
     .findOne({
-      accessToken: token,
+      accessToken: accessToken,
       revoked: false
     })
     .lean()
-    .exec(
-      function(callback, err, token) {
-        if (!token) {
-          console.error("Token not found");
-        }
-
-        callback(err, token);
-      }.bind(null, callback)
-    );
+    .then(token => {
+      //   if (!token) {
+      //     //TODO: return error
+      //     return new InvalidRequestError();
+      //   }
+      return Promise.all([
+        token,
+        clientModel.findOne({ clientId: token.clientId }),
+        userModel.findOne({ username: token.username })
+      ]);
+    })
+    .then(([token, client, user]) => {
+      return {
+        accessToken: token.accessToken,
+        accessTokenExpiresAt: token.expiresAt,
+        scope: token.scope,
+        client: client, // with 'id' property
+        user: user
+      };
+    });
 };
 
 var getClient = function(clientId, clientSecret) {
-  console.log("getClient");
-  console.log("clientId = ", clientId);
   return clientModel
     .findOne({
       clientId: clientId
@@ -96,7 +104,6 @@ var getUser = function(username, password) {
 };
 
 // var getUserFromClient = function(client) {
-//   console.log("getUserFromClient => ", client);
 //   return userModel
 //     .findOne({
 //       username: client.username
@@ -105,7 +112,6 @@ var getUser = function(username, password) {
 // };
 
 var getRefreshToken = function(refreshToken) {
-  console.log(refreshToken);
   return refreshTokenModel
     .findOne({
       refreshToken: refreshToken,
@@ -168,7 +174,6 @@ function getAuthorizationCode(authorizationCode) {
 }
 
 function saveAuthorizationCode(code, client, user) {
-  console.log("saveAuthorizationCode");
   let authCode = {
     authorizationCode: code.authorizationCode,
     expiresAt: code.expiresAt,
@@ -192,8 +197,6 @@ function saveAuthorizationCode(code, client, user) {
 }
 
 function revokeAuthorizationCode(code) {
-  console.log("revokeAuthorizationCode");
-  console.log("code = ", code);
   return authorizationCodeModel.updateOne(
     {
       authorizationCode: code.code
